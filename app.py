@@ -96,7 +96,7 @@ def plot_confusion_matrix(y_true, y_pred):
 
 
 st.set_page_config(page_title='Adult Income Model Explorer', layout='wide')
-st.title('Adult Income Classification Model PerformanceDashboard')
+st.title('Adult Income Classification Model Performance Dashboard')
 
 with st.sidebar:
     st.header('Controls')
