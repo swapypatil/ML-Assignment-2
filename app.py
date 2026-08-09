@@ -1,10 +1,13 @@
 from pathlib import Path
 
-import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -14,29 +17,26 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 
-DATA_PATH = Path(__file__).resolve().parent / 'Adult Census Income.csv'
-MODEL_DIR = Path(__file__).resolve().parent / 'model'
 REFERENCE_COLUMNS = [
     'age', 'workclass', 'fnlwgt', 'education', 'education.num', 'marital.status',
     'occupation', 'relationship', 'race', 'sex', 'capital.gain', 'capital.loss',
     'hours.per.week', 'native.country'
 ]
 
-MODEL_FILES = {
-    'Logistic Regression': MODEL_DIR / 'Logistic_Regression.joblib',
-    'Decision Tree': MODEL_DIR / 'Decision_Tree.joblib',
-    'kNN': MODEL_DIR / 'kNN.joblib',
-    'Naive Bayes': MODEL_DIR / 'Naive_Bayes.joblib',
-    'Random Forest': MODEL_DIR / 'Random_Forest.joblib',
+MODEL_SPECS = {
+    'Logistic Regression': LogisticRegression(max_iter=500, random_state=42),
+    'Decision Tree': DecisionTreeClassifier(random_state=42),
+    'kNN': KNeighborsClassifier(n_neighbors=5),
+    'Naive Bayes': GaussianNB(),
+    'Random Forest': RandomForestClassifier(n_estimators=200, random_state=42),
 }
-
-
-def load_reference_columns():
-    if DATA_PATH.exists():
-        df = pd.read_csv(DATA_PATH)
-        return list(df.drop(columns=['income']).columns)
-    return REFERENCE_COLUMNS
 
 
 def normalize_target(series):
@@ -60,27 +60,70 @@ def normalize_target(series):
 
 def prepare_uploaded_data(uploaded_file):
     df = pd.read_csv(uploaded_file)
-    required_cols = load_reference_columns()
-    missing = [col for col in required_cols if col not in df.columns]
+    missing = [col for col in REFERENCE_COLUMNS if col not in df.columns]
     if missing:
         raise ValueError(f'Missing required columns: {missing}')
 
-    df = df[required_cols + ['income']]
+    df = df[REFERENCE_COLUMNS + ['income']]
     df = df.replace('?', pd.NA)
     target = normalize_target(df['income'])
     features = df.drop(columns=['income'])
     return features, target
 
 
-def compute_metrics(y_true, y_pred, y_prob):
-    return {
-        'Accuracy': accuracy_score(y_true, y_pred),
-        'AUC': roc_auc_score(y_true, y_prob),
-        'Precision': precision_score(y_true, y_pred, zero_division=0),
-        'Recall': recall_score(y_true, y_pred, zero_division=0),
-        'F1': f1_score(y_true, y_pred, zero_division=0),
-        'MCC': matthews_corrcoef(y_true, y_pred),
+def build_preprocessor(X):
+    numeric_cols = X.select_dtypes(exclude=['object', 'category']).columns.tolist()
+    categorical_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()
+
+    transformers = []
+    if numeric_cols:
+        transformers.append(
+            ('num', Pipeline([('imputer', SimpleImputer(strategy='median'))]), numeric_cols)
+        )
+    if categorical_cols:
+        transformers.append(
+            (
+                'cat',
+                Pipeline([
+                    ('imputer', SimpleImputer(strategy='most_frequent')),
+                    ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False)),
+                ]),
+                categorical_cols,
+            )
+        )
+
+    return ColumnTransformer(transformers=transformers, remainder='drop')
+
+
+def fit_and_evaluate_model(model_name, X, y):
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y,
+    )
+
+    estimator = MODEL_SPECS[model_name]
+    pipeline = Pipeline([
+        ('preprocess', build_preprocessor(X_train)),
+        ('scaler', StandardScaler(with_mean=False)),
+        ('model', estimator),
+    ])
+    pipeline.fit(X_train, y_train)
+
+    y_pred = pipeline.predict(X_test)
+    y_prob = pipeline.predict_proba(X_test)[:, 1]
+
+    metrics = {
+        'Accuracy': accuracy_score(y_test, y_pred),
+        'AUC': roc_auc_score(y_test, y_prob),
+        'Precision': precision_score(y_test, y_pred, zero_division=0),
+        'Recall': recall_score(y_test, y_pred, zero_division=0),
+        'F1': f1_score(y_test, y_pred, zero_division=0),
+        'MCC': matthews_corrcoef(y_test, y_pred),
     }
+    return metrics, y_test, y_pred
 
 
 def plot_confusion_matrix(y_true, y_pred):
@@ -101,18 +144,15 @@ st.title('Adult Income Classification Model Performance Dashboard')
 with st.sidebar:
     st.header('Controls')
     uploaded_file = st.file_uploader('Upload test CSV', type=['csv'])
-    model_name = st.selectbox('Select model', list(MODEL_FILES.keys()))
+    model_name = st.selectbox('Select model', list(MODEL_SPECS.keys()))
 
 if uploaded_file is None:
-    st.info('Upload a CSV file containing the same columns as the Adult Census dataset. A sample file is available in the project folder.')
+    st.info('Upload a CSV file containing the same columns as the Adult Census dataset.')
     st.stop()
 
 try:
-    X_test, y_test = prepare_uploaded_data(uploaded_file)
-    model = joblib.load(MODEL_FILES[model_name])
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
-    metrics = compute_metrics(y_test, y_pred, y_prob)
+    X, y = prepare_uploaded_data(uploaded_file)
+    metrics, y_true, y_pred = fit_and_evaluate_model(model_name, X, y)
 except Exception as exc:
     st.error(f'Error while processing uploaded data: {exc}')
     st.stop()
@@ -132,12 +172,12 @@ for col, (label, value) in zip([col1, col2, col3, col4, col5, col6], metric_cols
     col.metric(label, f'{value:.4f}')
 
 st.subheader('Confusion Matrix')
-fig = plot_confusion_matrix(y_test, y_pred)
+fig = plot_confusion_matrix(y_true, y_pred)
 st.pyplot(fig)
 
 st.subheader('Prediction Summary')
 summary = pd.DataFrame({
-    'Actual': y_test,
+    'Actual': y_true,
     'Predicted': y_pred,
 })
 summary['Actual'] = summary['Actual'].map({0: '<=50K', 1: '>50K'})
