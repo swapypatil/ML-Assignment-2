@@ -12,10 +12,10 @@ The models are trained and evaluated on the Adult Census Income dataset, a well-
 
 **Dataset Name:** Adult Census Income
 
-**Source:** Kaggle / UCI Machine Learning Repository
+**Source:** Kaggle 
 
 **Dataset Size:**
-- Total Records: 30,162 instances
+- Total Records: 30,162 
 - Total Features: 14 features + 1 target variable
 - Training Split: 80% (24,129 samples)
 - Testing Split: 20% (6,033 samples)
@@ -40,7 +40,7 @@ The models are trained and evaluated on the Adult Census Income dataset, a well-
 
 **Class Distribution:**
 - <=50K: 22,654 samples (75.2%)
-- >50K: 7,508 samples (24.8%)
+- \>50K: 7,508 samples (24.8%)
 
 The dataset is well-balanced for training purposes and includes both numeric and categorical features, requiring appropriate preprocessing techniques including imputation, encoding, and feature scaling.
 
@@ -55,7 +55,7 @@ The dataset is well-balanced for training purposes and includes both numeric and
 - `train_models.py` - Training script for all five models
 - `requirements.txt` - Python package dependencies
 - `README.md` - This documentation file
-- `test_data.csv` - Sample test dataset (2,000 stratified samples)
+- `test_data.csv` - Sample test dataset
 - `model_metrics.csv` - Evaluation metrics for all trained models
 - `model/` - Directory containing:
   - Individual model training scripts (`Logistic_Regression.py`, `Decision_Tree.py`, etc.)
@@ -153,35 +153,10 @@ The project includes an interactive Streamlit application that allows users to:
 - Visualize confusion matrices
 - Inspect prediction samples
 
-**Deployment:** Available on Streamlit Community Cloud for live evaluation
-
----
-
-## How to Run
-
-### Local Development
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run training
-python train_models.py
-
-# Launch web app
-streamlit run app.py
-```
-
-### Testing with Sample Data
-Use the provided `test_data.csv` file (2,000 stratified samples) in the Streamlit app interface to evaluate model performance.
+**Deployment:** Available on Streamlit Community Cloud for live evaluation - https://adult-income-census-data-ml-model-performance.streamlit.app/
 
 ---
 
 ## Results Summary
 
 The systematic comparison of five ML algorithms reveals that ensemble methods (Random Forest) significantly outperform individual algorithms on this demographic classification task. The clear winner demonstrates that combining multiple learners provides both better predictive performance and more reliable probability estimates, making it the recommended model for production deployment.
-
----
-
-**Assignment:** Machine Learning - Classification Models Comparison  
-**Date Submitted:** August 2026  
-**Status:** Completed
